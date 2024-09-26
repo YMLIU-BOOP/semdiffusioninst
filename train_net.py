@@ -1,23 +1,16 @@
-"""
-Modified by Zhangxuan Gu, Haoxing Chen
-Date: Nov 30, 2022
-Version: V0
-Contact: {guzhangxuan.gzx, chenhaoxing.chx}@antgroup.com
-Copyright (c) Ant Group, Inc. and its affiliates. All Rights Reserved
-
-DiffusionInst Training Script.
-
-This script is a simplified version of the training script in detectron2/tools.
-"""
-
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import itertools
 import weakref
 from typing import Any, Dict, List, Set
 import logging
 from collections import OrderedDict
+import matplotlib
+matplotlib.use('Agg')
+
 import torch
 from fvcore.nn.precise_bn import get_bn_modules
+
 import detectron2.utils.comm as comm
 from detectron2.utils.logger import setup_logger
 from detectron2.checkpoint import DetectionCheckpointer
@@ -69,7 +62,7 @@ class Trainer(DefaultTrainer):
             # Assume you want to save checkpoints together with logs/statistics
             model,
             cfg.OUTPUT_DIR,
-            **kwargs,
+            **kwargs
             # trainer=weakref.proxy(self),
         )
         self.start_iter = 0
@@ -252,6 +245,10 @@ def setup(args):
     add_model_ema_configs(cfg)
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
+    cfg.MODEL.WEIGHTS = "/data/ymliu/DiffusionInst-main/models/R-50.pkl"
+    cfg.OUTPUT_DIR = "/data/ymliu/DiffusionInst-main/sem-output_r50"
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 5
+    cfg.SOLVER.MAX_ITER = 30000
     cfg.freeze()
     default_setup(cfg, args)
     return cfg
@@ -269,6 +266,9 @@ def main(args):
         else:
             DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR, **kwargs).resume_or_load(cfg.MODEL.WEIGHTS,
                                                                                            resume=args.resume)
+                                                                                           
+        logger = logging.getLogger(__name__)
+        logger.info("Model weights loaded from: {}".format(cfg.MODEL.WEIGHTS))
         res = Trainer.ema_test(cfg, model)
         if cfg.TEST.AUG.ENABLED:
             res.update(Trainer.test_with_TTA(cfg, model))
@@ -284,6 +284,7 @@ def main(args):
 if __name__ == "__main__":
     args = default_argument_parser().parse_args()
     print("Command Line Args:", args)
+    setup_logger(output="/data/ymliu/DiffusionInst-main/sem-output_r50")
     launch(
         main,
         args.num_gpus,
